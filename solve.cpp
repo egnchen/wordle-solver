@@ -106,8 +106,6 @@ inline float calc_entropy(wdString target, const wdStringSet &word_list)
         pattern_t p = target.compare(w);
         cnt[p]++;
     }
-    // pattern 0 is ccccc which is correct
-    // we give it a higher expectation
     float exp = 0;
     float total = float(word_list.size());
     for(int i = 0; i < 243; i++) if(cnt[i]) {
@@ -138,6 +136,7 @@ wdString calc_entropies(const wdStringArray &candidates, const wdStringSet &vali
     if(valid.size() > 2000) {
         ans = initial;
     } else {
+        ans.reserve(candidates.size() + valid.size());
         // first all valid strings
         for(const wdString &w: valid) {
             ans.push_back({w, calc_entropy(w, valid)});
@@ -146,12 +145,12 @@ wdString calc_entropies(const wdStringArray &candidates, const wdStringSet &vali
         for(const wdString &w: candidates) if(valid.find(w) == valid.cend()) {
             ans.push_back({w, calc_entropy(w, valid)});
         }
+        assert(ans.size() > 0);
+        // do stable sort so strings in valid set get to be picked first
+        stable_sort(ans.begin(), ans.end(), [&](const pr &a, const pr &b) {
+            return a.second > b.second;
+        });
     }
-    assert(ans.size() > 0);
-    // do stable sort so strings in valid set get to be picked first
-    stable_sort(ans.begin(), ans.end(), [&](const pr &a, const pr &b) {
-        return a.second > b.second;
-    });
 
     if(output) {
         cout << "Top 10 recommended guesses:" << endl;
@@ -191,14 +190,13 @@ void init_files() {
 
 void benchmark() {
     wdStringSet word_left;
-    wdStringSet answers_set(possible_answers.begin(), possible_answers.end());
     vector<int> distribution(7, 0);
     int stat = 0;
 
     for(int i = 0; i < possible_answers.size(); i++) {
         const wdString &choice = possible_answers[i];
         int j;
-        word_left = wdStringSet(possible_answers.begin(), possible_answers.end());
+        word_left = possible_answers_set;
         wdStringArray guesses;
         for(j = 0; j < 10; j++) {
             wdString user_input = calc_entropies(possible_words, word_left);
