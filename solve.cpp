@@ -2,6 +2,7 @@
 #include <fstream>
 #include <vector>
 #include <cmath>
+#include <unistd.h>
 #include <string>
 #include <iomanip>
 #include <cassert>
@@ -13,9 +14,19 @@
 #include <set>
 #include <unordered_set>
 
-#include <gperftools/profiler.h>
-
 using namespace std;
+
+const char *usage_prompt = "Options:\n\
+\t-b: Run benchmark\n\
+\t-c: Run interactive cheating\n\
+\t-h: Show this message\n\
+\n\
+Help on interactive cheating:\n\
+c represent correct\n\
+n represents null/non-existent\n\
+p represents exist but position not right\n\
+For example, \"ppcnn\" means the first two have wrong positions, the middle one is correct and the rest aren't find anywhere in this word.\
+";
 
 // this is the wordle game solver inspired by 3b1b
 // watch this: https://www.youtube.com/watch?v=v68zYyaEmEA
@@ -220,57 +231,11 @@ vector<pair<pattern_t, wdStringSet>> get_topn_patterns_and_words(wdString guess,
 }
 
 // two layer searching is proved to be useless.
-// #define USE_TWO_LAYER_GUESS
-
 wdString do_guess(const wdStringSet &valid, bool output=false) {
     typedef pair<wdString, float> pr;
     vector<pr> ans;
 
-    #ifndef USE_TWO_LAYER_GUESS
-
     ans = get_topn(valid, 10);
-
-    #else
-
-    static const vector<pr> initial = {
-        { wdString("slate"), 10.304 },
-        { wdString("trace"), 10.272 },
-        { wdString("crate"), 10.267 },
-        { wdString("least"), 10.248 },
-        { wdString("stale"), 10.241 },
-        { wdString("stare"), 10.212 },
-        { wdString("grate"), 10.186 },
-        { wdString("react"), 10.180 },
-        { wdString("saner"), 10.179 },
-        { wdString("snare"), 10.133 },
-    };
-
-    if(valid.size() > 2000) {
-        // use initial guess directly
-        ans = initial;
-    } else {
-        // do two-layer guess
-        ans = get_topn(valid, 10);
-        for(auto &pr: ans) {
-            auto stat = get_topn_patterns_and_words(pr.first, valid, 50);
-            for(const auto &p: stat) {
-                const wdStringSet &new_valid = p.second;
-                auto layer2_choice = get_topn(new_valid, 1);
-                if(layer2_choice[0].second == 0) {
-                    break;
-                }
-                pr.second += float(new_valid.size()) * layer2_choice.front().second / valid.size();
-            }
-        }
-
-        // sort again
-        sort(ans.begin(), ans.end(), [](const pair<wdString, float> &a, const pair<wdString, float> &b) {
-            return a.second > b.second;
-        });
-    
-    }
-        
-    #endif
 
     if(output) {
         cout << "Top 10 recommended guesses:" << endl;
@@ -453,19 +418,32 @@ void testCompare(string s1, string s2, string pat)
     }
 }
 
-int main(void) {
+int main(int argc, char *const argv[]) {
+    int option;
+    void (*action)() = cheat;
+
+    while((option = getopt(argc, argv, "hbc")) != -1) {
+        switch(option) {
+            case 'h':
+                cout << "Usage: " << argv[0] << " <options>" << endl;
+                cout << usage_prompt << endl;
+                exit(0);
+            case 'b':
+                // do benchmark
+                action = benchmark;
+                break;
+            case 'c':
+            default:
+                // cheat
+                break;
+        }
+    }
+
     init();
 
     testCompare("taint", "about", "npnnc");
     testCompare("slate", "gaint", "nnppn");
 
-    // maybe you want to do benchmark
-    // ProfilerStart("test.prof");
-    // benchmark();
-    // ProfilerStop();
-    
-    // or maybe you just want to cheat
-    cheat();
-    
+    action();
     return 0;
 }
