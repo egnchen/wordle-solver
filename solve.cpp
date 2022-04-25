@@ -27,40 +27,58 @@ using wdStringSet = set<wdString, wdStringCmp>;
 
 struct wdString {
 public:
-    char data[8];
-    uint32_t mask;
+    union {
+        char str[8];
+        uint64_t data64;
+    } data;
     wdString(string w) {
         assert(w.length() == 5);
-        strncpy(data, w.c_str(), 6);
-        mask = 0;
-        for(int i = 0; i < 5; i++) mask |= 1 << (data[i] - 'a');
+        data.data64 = 0;
+        strncpy(data.str, w.c_str(), 6);
     }
-    bool eql(const wdString &rhs) const { return strcmp(data, rhs.data) == 0; }
+    bool eql(const wdString &rhs) const { return data.data64 == rhs.data.data64; }
     pattern_t compare(const wdString &real_answer) const;
 };
 
-inline pattern_t wdString::compare(const wdString &real_answer) const {
+pattern_t wdString::compare(const wdString &real_answer) const {
     pattern_t ret = 0;
-    for(int i = 0; i < 5; i++) {
-        ret *= 3;
-        if(data[i] == real_answer.data[i]) {
-            // nothing
-        } else if(real_answer.mask & (1 << data[i])) {
-            ret += 1;
-        } else {
-            ret += 2;
+    static const uint8_t weights[] = {1, 3, 9, 27, 81};
+    pattern_t pos[] = {0, 1, 2, 3, 4};
+    // make a copy of data
+    char buf1[8], buf2[8];
+    *((uint64_t *)buf1) = data.data64;
+    *((uint64_t *)buf2) = real_answer.data.data64;
+    // pass 1(green)
+    int nlen = 5;
+    for(int i = 0; i < nlen; i++) {
+        if(buf1[i] == buf2[i]) {
+            ret += weights[pos[i]] * 2;
+            // move the last one to this place
+            buf1[i] = buf1[nlen - 1];
+            buf2[i] = buf2[nlen - 1];
+            buf1[nlen - 1] = buf2[nlen - 1] = '\0';
+            pos[i] = pos[nlen - 1];
+            nlen--;
+            i--;
         }
     }
+    // pass 2(yellow)
+    for(int i = 0; i < nlen; i++) {
+        if(strchr(buf2, buf1[i]) != NULL) {
+            ret += weights[pos[i]];
+        }
+    }
+    // remaining is zero
     return ret;
 }
 
 ostream &operator<<(ostream &os, const wdString &wd) {
-    return os << wd.data;
+    return os << wd.data.str;
 }
 
 struct wdStringCmp {
     bool operator()(const wdString &s1, const wdString &s2) const {
-        return strcmp(s1.data, s2.data) < 0;
+        return strcmp(s1.data.str, s2.data.str) < 0;
     }
 };
 
@@ -71,9 +89,9 @@ std::string get_pattern_string(pattern_t pattern)
     pat[5] = '\0';
     for(int i = 0; i < 5; i++) {
         int cur = pattern % 3;
-        if(cur == 0) pat[4 - i] = 'c';
-        else if(cur == 1) pat[4 - i] = 'p';
-        else pat[4 - i] = 'n';
+        if(cur == 0) pat[i] = 'n';
+        else if(cur == 1) pat[i] = 'p';
+        else pat[i] = 'c';
         pattern /= 3;
     }
     return string(pat);
@@ -82,14 +100,14 @@ std::string get_pattern_string(pattern_t pattern)
 pattern_t from_pattern_string(string pattern)
 {
     pattern_t ret = 0;
+    pattern_t weights[] = {1, 3, 9, 27, 81};
     for(int i = 0; i < 5; i++) {
-        ret *= 3;
-        if(pattern[i] == 'c') {
+        if(pattern[i] == 'n') {
             // do nothing
         } else if(pattern[i] == 'p') {
-            ret += 1;
-        } else if(pattern[i] == 'n') {
-            ret += 2;
+            ret += weights[i];
+        } else if(pattern[i] == 'c') {
+            ret += 2 * weights[i];
         } else {
             assert(false);
             return 255;
@@ -126,16 +144,16 @@ vector<pair<wdString, float>> get_topn(const wdStringSet &valid, int n)
 {
     typedef pair<wdString, float> pr;
     static const vector<pr> initial = {
-        { wdString("slate"), 6.19592 },
-        { wdString("crate"), 6.14959 },
-        { wdString("trace"), 6.12446 },
-        { wdString("stare"), 6.10236 },
-        { wdString("saner"), 6.05645 },
-        { wdString("stale"), 6.04945 },
-        { wdString("react"), 6.02973 },
-        { wdString("least"), 6.00874 },
-        { wdString("snare"), 6.00781 },
-        { wdString("grate"), 6.00032 },
+        { wdString("soare"), 5.885 },
+        { wdString("roate"), 5.885 },
+        { wdString("raise"), 5.878 },
+        { wdString("reast"), 5.868 },
+        { wdString("raile"), 5.865 },
+        { wdString("slate"), 5.856 },
+        { wdString("salet"), 5.836 },
+        { wdString("crate"), 5.835 },
+        { wdString("irate"), 5.833 },
+        { wdString("trace"), 5.830 },
     };
     assert(valid.size() > 0);
     vector<pr> ans;
@@ -183,10 +201,19 @@ vector<pair<pattern_t, wdStringSet>> get_topn_patterns_and_words(wdString guess,
     return ret;
 }
 
-#define USE_TWO_LAYER_GUESS
-// do guess with two-layer search
+// two layer searching is proved to be useless.
+// #define USE_TWO_LAYER_GUESS
+
 wdString do_guess(const wdStringSet &valid, bool output=false) {
     typedef pair<wdString, float> pr;
+    vector<pr> ans;
+
+    #ifndef USE_TWO_LAYER_GUESS
+
+    ans = get_topn(valid, 10);
+
+    #else
+
     static const vector<pr> initial = {
         { wdString("slate"), 10.304 },
         { wdString("trace"), 10.272 },
@@ -199,14 +226,6 @@ wdString do_guess(const wdStringSet &valid, bool output=false) {
         { wdString("saner"), 10.179 },
         { wdString("snare"), 10.133 },
     };
-    
-    vector<pr> ans;
-
-    #ifndef USE_TWO_LAYER_GUESS
-
-    return get_topn(valid, 1)[0].first;
-
-    #else
 
     if(valid.size() > 2000) {
         // use initial guess directly
@@ -219,6 +238,9 @@ wdString do_guess(const wdStringSet &valid, bool output=false) {
             for(const auto &p: stat) {
                 const wdStringSet &new_valid = p.second;
                 auto layer2_choice = get_topn(new_valid, 1);
+                if(layer2_choice[0].second == 0) {
+                    break;
+                }
                 pr.second += float(new_valid.size()) * layer2_choice.front().second / valid.size();
             }
         }
@@ -236,7 +258,7 @@ wdString do_guess(const wdStringSet &valid, bool output=false) {
         cout << "Top 10 recommended guesses:" << endl;
         for(int i = 0; i < 10; i++) {
             const auto &p = ans[i];
-            if(possible_answers_set.find(p.first) != possible_answers_set.end()) {
+            if(valid.find(p.first) != valid.end()) {
                 cout << "✅";
             } else {
                 cout << "❌";
@@ -325,8 +347,11 @@ void benchmark() {
     int stat = 0;
     vector<thread> threads;
     mutex lk;
+    #ifdef DEBUG
+    const int THREAD_COUNT = 1;
+    #else
     const int THREAD_COUNT = std::thread::hardware_concurrency();
-    // const int THREAD_COUNT = 1;
+    #endif
     if(THREAD_COUNT > 1) {
         for(int ti = 0; ti < THREAD_COUNT; ti++) {
             int start = possible_answers.size() * ti / THREAD_COUNT;
@@ -358,12 +383,19 @@ void cheat()
     wdStringSet left = possible_answers_set;
     while(left.size() > 0) {
         string buf;
-        wdString user_input("");
+        wdString user_input("*****");
         pattern_t pat;
 
-        cout << left.size() << " possible words left" << endl;
-        for(wdString w: left) cout << w << '\t';
-        cout << endl;
+        {
+            int i = 0;
+            cout << left.size() << " possible words left" << endl;
+            for(const wdString &w: left) {
+                cout << w << '\t';
+                if(i++ == 16) break;
+            }
+            if(left.size() > 16) cout << "... and " << (left.size() - 16) << " more";
+            cout << endl;
+        }
         do_guess(left, true);
         do {
             cout << "Your input: ";
@@ -377,9 +409,11 @@ void cheat()
             pat = from_pattern_string(buf);
         } while(pat == 255);
 
+        cout << "Got pattern " << get_pattern_string(pat) << endl;
+
         // filter words
         wdStringSet new_left;
-        for(wdString w: left) {
+        for(const wdString &w: left) {
             if(user_input.compare(w) == pat) {
                 new_left.insert(w);
             }
@@ -391,13 +425,29 @@ void cheat()
     }
 }
 
+void testCompare(string s1, string s2, string pat)
+{
+    pattern_t actual = wdString(s1).compare(wdString(s2));
+    if(actual != from_pattern_string(pat)) {
+        cerr << "Expecting " << pat << endl;
+        cerr << "Actual " << get_pattern_string(actual) << endl;
+        assert(false);
+    }
+}
+
 int main(void) {
     init();
-    ProfilerStart("test.prof");
+
+    testCompare("taint", "about", "npnnc");
+    testCompare("slate", "gaint", "nnppn");
+
     // maybe you want to do benchmark
+    ProfilerStart("test.prof");
     benchmark();
     ProfilerStop();
+    
     // or maybe you just want to cheat
     // cheat();
+    
     return 0;
 }
