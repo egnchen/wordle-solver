@@ -1,6 +1,6 @@
 .PHONY: all clean
 
-CXXFLAGS = -std=c++17 -Wall -lprofiler
+CXXFLAGS = -std=c++14 -Wall -lprofiler
 
 all: debug
 

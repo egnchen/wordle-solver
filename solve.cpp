@@ -442,12 +442,12 @@ int main(void) {
     testCompare("slate", "gaint", "nnppn");
 
     // maybe you want to do benchmark
-    ProfilerStart("test.prof");
-    benchmark();
-    ProfilerStop();
+    // ProfilerStart("test.prof");
+    // benchmark();
+    // ProfilerStop();
     
     // or maybe you just want to cheat
-    // cheat();
+    cheat();
     
     return 0;
 }
