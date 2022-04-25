@@ -116,6 +116,24 @@ pattern_t from_pattern_string(string pattern)
     return ret;
 }
 
+void print_string_with_pattern(const wdString &w, pattern_t pat)
+{
+    cout << "Your guess: ";
+    thread_local char buf[64];
+    char *p = buf;
+    for(int i = 0; i < 5; i++) {
+        uint8_t cp = pat % 3;
+        if(cp == 0) {
+            p += sprintf(p, "\e[40m%c\e[0m ", w.data.str[i]);
+        } else if(cp == 1) {
+            p += sprintf(p, "\e[43m%c\e[0m ", w.data.str[i]);
+        } else {
+            p += sprintf(p, "\e[42m%c\e[0m ", w.data.str[i]);
+        }
+    }
+    cout << buf << endl;
+}
+
 float calc_entropy(wdString guess, const wdStringSet &word_list)
 {
     assert(word_list.size() > 0);
@@ -409,7 +427,7 @@ void cheat()
             pat = from_pattern_string(buf);
         } while(pat == 255);
 
-        cout << "Got pattern " << get_pattern_string(pat) << endl;
+        print_string_with_pattern(user_input, pat);
 
         // filter words
         wdStringSet new_left;
