@@ -16,7 +16,7 @@ Average =       3.466
 ```
 
 Implementation details which are different from the video:
-* Lack of heuristic function. Essentially this is the "version one" described in the video.
+* Lack of heuristic function. Essentially this is the "version one" described in the video, combined with mixed usage of answer word list(~2300 words) & all possible word list(~13000 words).
     * After experiment two-level heuristic is an overkill. Its improvement is marginal and would drastically hurt performance.
 
 ## How to use?
