@@ -2,27 +2,26 @@
 
 Solver for the [wordle game](https://www.nytimes.com/games/wordle/index.html) inspired by this [3blue1brown video](https://www.youtube.com/watch?v=v68zYyaEmEA&t=1031s).
 
-Current performance is ~3.56 guesses on average:
+Current performance is ~3.47 guesses on average:
 ```
-.......................
-Average =	3.55825
 Distribution:
-1	1
-2	74
-3	1074
-4	976
-5	164
-6	19
->6	1
+1       0
+2       45
+3       1208
+4       992
+5       63
+6       1
+>6      0
+Average =       3.466
 ```
 
 Implementation details which are different from the video:
 * Lack of heuristic function. Essentially this is the "version one" described in the video.
-* Combined use of list of possible answers(~2000 words) with list of possible words(~10000 words). This could drastically improve performance.
+    * After experiment two-level heuristic is an overkill. Its improvement is marginal and would drastically hurt performance.
 
 ## How to use?
 
-Make sure you have a C++17 compliant compiler, then use `make` to build it.
+Make sure you have a C++14 compliant compiler, then use `make` to build it.
 
 The way to describe wordle output:
 * **c** means correct;
