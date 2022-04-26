@@ -18,7 +18,7 @@ using namespace std;
 
 const char *usage_prompt = "Options:\n\
 \t-b: Run benchmark\n\
-\t-c: Run interactive cheating\n\
+\t-c: Run interactive cheating(default)\n\
 \t-h: Show this message\n\
 \n\
 Help on interactive cheating:\n\
@@ -372,7 +372,7 @@ void cheat()
 
         {
             int i = 0;
-            cout << left.size() << " possible words left" << endl;
+            cout << left.size() << " possible words left:" << endl;
             for(const wdString &w: left) {
                 cout << w << '\t';
                 if(i++ == 16) break;
@@ -425,18 +425,18 @@ int main(int argc, char *const argv[]) {
 
     while((option = getopt(argc, argv, "hbc")) != -1) {
         switch(option) {
-            case 'h':
-                cout << "Usage: " << argv[0] << " <options>" << endl;
-                cout << usage_prompt << endl;
-                exit(0);
             case 'b':
                 // do benchmark
                 action = benchmark;
                 break;
             case 'c':
-            default:
-                // cheat
+                // check
                 break;
+            case 'h':
+            default:
+                cout << "Usage: " << argv[0] << " <options>" << endl;
+                cout << usage_prompt << endl;
+                exit(0);
         }
     }
 
