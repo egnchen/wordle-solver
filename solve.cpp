@@ -135,12 +135,13 @@ void print_string_with_pattern(const wdString &w, pattern_t pat)
     for(int i = 0; i < 5; i++) {
         uint8_t cp = pat % 3;
         if(cp == 0) {
-            p += sprintf(p, "\e[40m%c\e[0m ", w.data.str[i]);
+            p += sprintf(p, "\e[1;40m%c\e[0m", w.data.str[i]);
         } else if(cp == 1) {
-            p += sprintf(p, "\e[43m%c\e[0m ", w.data.str[i]);
+            p += sprintf(p, "\e[1;43m%c\e[0m", w.data.str[i]);
         } else {
-            p += sprintf(p, "\e[42m%c\e[0m ", w.data.str[i]);
+            p += sprintf(p, "\e[1;42m%c\e[0m", w.data.str[i]);
         }
+        pat /= 3;
     }
     cout << buf << endl;
 }
