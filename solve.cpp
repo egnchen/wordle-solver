@@ -151,10 +151,11 @@ float calc_entropy(wdString guess, const wdStringSet &word_list) {
     }
     float exp = 0;
     float total = float(word_list.size());
-    for (int i = 0; i < 243; i++)
+    for (int i = 0; i < 243; i++) {
         if (cnt[i]) {
             exp += log2f(total / cnt[i]) * cnt[i];
         }
+    }
     exp /= total;
     assert(!isnan(exp));
     return exp;
@@ -195,33 +196,6 @@ vector<pair<wdString, float>> get_topn(const wdStringSet &valid, int n) {
     }
 
     return vector<pr>(ans.begin(), ans.begin() + n);
-}
-
-vector<pair<pattern_t, wdStringSet>>
-get_topn_patterns_and_words(wdString guess, const wdStringSet &valid,
-                                                        int n = 20) {
-    assert(n > 0);
-    thread_local vector<wdStringSet> stat(243);
-    thread_local vector<pattern_t> ident(243);
-    vector<pair<pattern_t, wdStringSet>> ret;
-    for (int i = 0; i < 243; i++)
-        ident[i] = i;
-    for (wdStringSet &s : stat)
-        s.clear();
-
-    for (const wdString &w : valid) {
-        stat[guess.compare(w)].insert(w);
-    }
-    partial_sort(ident.begin(), ident.begin() + n, ident.end(),
-                             [&](pattern_t a, pattern_t b) {
-                                 return stat[a].size() > stat[b].size();
-                             });
-    ret.reserve(n);
-    for (int i = 0; i < n; i++)
-        if (!stat[ident[i]].empty()) {
-            ret.push_back({ident[i], stat[ident[i]]});
-        }
-    return ret;
 }
 
 // two layer searching is proved to be useless.
