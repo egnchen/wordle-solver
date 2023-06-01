@@ -1,17 +1,11 @@
+#include "wordle.h"
 #include <algorithm>
 #include <cassert>
-#include <cmath>
-#include <cstring>
 #include <fstream>
-#include <functional>
 #include <iomanip>
-#include <iostream>
 #include <mutex>
-#include <set>
-#include <string>
 #include <thread>
 #include <unistd.h>
-#include <unordered_set>
 #include <vector>
 
 using namespace std;
@@ -27,176 +21,6 @@ n represents null/non-existent\n\
 p represents exist but position not right\n\
 For example, \"ppcnn\" means the first two have wrong positions, the middle one is correct and the rest aren't find anywhere in this word.\
 ";
-
-// this is the wordle game solver inspired by 3b1b
-// watch this: https://www.youtube.com/watch?v=v68zYyaEmEA
-typedef uint8_t pattern_t;
-struct wdString;
-struct wdStringCmp;
-using wdStringArray = vector<wdString>;
-using wdStringSet = set<wdString, wdStringCmp>;
-
-struct wdString {
-public:
-    union {
-        char str[8];
-        uint64_t data64;
-    } data;
-    wdString(string w) {
-        assert(w.length() == 5);
-        data.data64 = 0;
-        strncpy(data.str, w.c_str(), 6);
-    }
-    bool eql(const wdString &rhs) const { return data.data64 == rhs.data.data64; }
-    pattern_t compare(const wdString &real_answer) const;
-};
-
-pattern_t wdString::compare(const wdString &real_answer) const {
-    pattern_t ret = 0;
-    static const uint8_t weights[] = {1, 3, 9, 27, 81};
-    // make a copy of data
-    char buf1[8], buf2[8];
-    *((uint64_t *)buf1) = data.data64;
-    *((uint64_t *)buf2) = real_answer.data.data64;
-    // pass 1(green)
-    for (int i = 0; i < 5; i++) {
-        if (buf1[i] == buf2[i]) {
-            ret += weights[i] * 2;
-            buf1[i] = buf2[i] = '\0';
-        }
-    }
-    // pass 2(yellow)
-    for (int i = 0; i < 5; i++)
-        if (buf1[i]) {
-            char *found = (char *)memchr(buf2, buf1[i], 5);
-            if (found) {
-                ret += weights[i];
-                *found = '\0';
-            }
-        }
-    // remaining is zero
-    return ret;
-}
-
-ostream &operator<<(ostream &os, const wdString &wd) {
-    return os << wd.data.str;
-}
-
-struct wdStringCmp {
-    bool operator()(const wdString &s1, const wdString &s2) const {
-        return strcmp(s1.data.str, s2.data.str) < 0;
-    }
-};
-
-// deserialize pattern
-std::string get_pattern_string(pattern_t pattern) {
-    thread_local char pat[6] = {0};
-    pat[5] = '\0';
-    for (int i = 0; i < 5; i++) {
-        int cur = pattern % 3;
-        if (cur == 0)
-            pat[i] = 'n';
-        else if (cur == 1)
-            pat[i] = 'p';
-        else
-            pat[i] = 'c';
-        pattern /= 3;
-    }
-    return string(pat);
-}
-
-pattern_t from_pattern_string(string pattern) {
-    pattern_t ret = 0;
-    pattern_t weights[] = {1, 3, 9, 27, 81};
-    for (int i = 0; i < 5; i++) {
-        if (pattern[i] == 'n') {
-            // do nothing
-        } else if (pattern[i] == 'p') {
-            ret += weights[i];
-        } else if (pattern[i] == 'c') {
-            ret += 2 * weights[i];
-        } else {
-            assert(false);
-            return 255;
-        }
-    }
-    return ret;
-}
-
-void print_string_with_pattern(const wdString &w, pattern_t pat) {
-    cout << "Your guess: ";
-    thread_local char buf[64];
-    char *p = buf;
-    for (int i = 0; i < 5; i++) {
-        uint8_t cp = pat % 3;
-        if (cp == 0) {
-            p += sprintf(p, "\e[1;40m%c\e[0m", w.data.str[i]);
-        } else if (cp == 1) {
-            p += sprintf(p, "\e[1;43m%c\e[0m", w.data.str[i]);
-        } else {
-            p += sprintf(p, "\e[1;42m%c\e[0m", w.data.str[i]);
-        }
-        pat /= 3;
-    }
-    cout << buf << endl;
-}
-
-float calc_entropy(wdString guess, const wdStringSet &word_list) {
-    assert(word_list.size() > 0);
-    thread_local int16_t cnt[243] = {0};
-    memset(cnt, 0, sizeof(cnt));
-    for (const wdString &w : word_list) {
-        pattern_t p = guess.compare(w);
-        cnt[p]++;
-    }
-    float exp = 0;
-    float total = float(word_list.size());
-    for (int i = 0; i < 243; i++) {
-        if (cnt[i]) {
-            exp += log2f(total / cnt[i]) * cnt[i];
-        }
-    }
-    exp /= total;
-    assert(!isnan(exp));
-    return exp;
-}
-
-wdStringArray possible_answers;
-wdStringArray possible_words;
-wdStringSet possible_answers_set;
-
-vector<pair<wdString, float>> get_topn(const wdStringSet &valid, int n) {
-    typedef pair<wdString, float> pr;
-    static const vector<pr> initial = {
-            {wdString("soare"), 5.885}, {wdString("roate"), 5.885},
-            {wdString("raise"), 5.878}, {wdString("reast"), 5.868},
-            {wdString("raile"), 5.865}, {wdString("slate"), 5.856},
-            {wdString("salet"), 5.836}, {wdString("crate"), 5.835},
-            {wdString("irate"), 5.833}, {wdString("trace"), 5.830},
-    };
-    assert(valid.size() > 0);
-    vector<pr> ans;
-    if (valid.size() > 2000) {
-        ans = initial;
-    } else {
-        ans.reserve(valid.size() + possible_words.size() - possible_answers.size());
-        // first all valid strings
-        for (const wdString &w : valid) {
-            ans.push_back({w, calc_entropy(w, valid)});
-        }
-        // all words, except for those answers!
-        for (const wdString &w : possible_words)
-            if (valid.find(w) == valid.cend()) {
-                ans.push_back({w, calc_entropy(w, valid)});
-            }
-        assert(ans.size() > 0);
-        // do stable sort so strings in valid set get to be picked first
-        stable_sort(ans.begin(), ans.end(),
-                                [&](const pr &a, const pr &b) { return a.second > b.second; });
-    }
-
-    return vector<pr>(ans.begin(), ans.begin() + n);
-}
 
 // two layer searching is proved to be useless.
 wdString do_guess(const wdStringSet &valid, bool output = false) {
@@ -332,25 +156,26 @@ void benchmark() {
     cout << "Average =\t" << (float(stat) / possible_answers.size()) << endl;
 }
 
+void print_word_list(const wdStringSet &word_list, int nr_print = 16) {
+    int i = 0;
+    for (const wdString &w : word_list) {
+        cout << w << '\t';
+        if (i++ == 16)
+            break;
+    }
+    if (word_list.size() > nr_print) {
+        cout << "... and " << (word_list.size() - nr_print) << " more";
+    }
+    cout << endl;
+}
+
 void cheat() {
     wdStringSet left = possible_answers_set;
     while (left.size() > 0) {
         string buf;
         wdString user_input("*****");
         pattern_t pat;
-
-        {
-            int i = 0;
-            cout << left.size() << " possible words left:" << endl;
-            for (const wdString &w : left) {
-                cout << w << '\t';
-                if (i++ == 16)
-                    break;
-            }
-            if (left.size() > 16)
-                cout << "... and " << (left.size() - 16) << " more";
-            cout << endl;
-        }
+        print_word_list(left); 
         do_guess(left, true);
         do {
             cout << "Your input: ";
@@ -380,7 +205,7 @@ void cheat() {
     }
 }
 
-void testCompare(string s1, string s2, string pat) {
+void test_compare(string s1, string s2, string pat) {
     pattern_t actual = wdString(s1).compare(wdString(s2));
     if (actual != from_pattern_string(pat)) {
         cerr << "Expecting " << pat << endl;
@@ -412,9 +237,9 @@ int main(int argc, char *const argv[]) {
 
     init();
 
-    testCompare("taint", "about", "npnnc");
-    testCompare("slate", "gaint", "nnppn");
-    testCompare("dwell", "elegy", "nncpn");
+    test_compare("taint", "about", "npnnc");
+    test_compare("slate", "gaint", "nnppn");
+    test_compare("dwell", "elegy", "nncpn");
 
     action();
     return 0;

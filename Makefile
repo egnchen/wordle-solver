@@ -1,6 +1,6 @@
 .PHONY: all clean
 
-CXXFLAGS = -std=c++14 -Wall
+CXXFLAGS = -MMD -std=c++17 -Wall
 
 all: debug
 
@@ -10,6 +10,7 @@ release: CXXFLAGS += -O3
 release: solve
 
 clean:
-	rm -rf solve *.o *.dSYM/
+	rm -rf solve *.o *.d *.dSYM/
 
-solve: solve.cpp
+solve: solve.o wordle.o
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $? -o $@

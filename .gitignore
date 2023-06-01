@@ -1,4 +1,5 @@
 *.o
+*.d
 solve
 *.dSYM/
 .DS_Store
